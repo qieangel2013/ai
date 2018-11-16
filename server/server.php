@@ -1,0 +1,126 @@
+<?php
+/*
+ * yield 异步启动服务
+ * @author qieangel2013
+ */
+ini_set("display_errors", "On");
+error_reporting(E_ALL | E_STRICT);
+if(!extension_loaded('swoole'))
+{
+    exit("Please install swoole extension.\n");
+}
+//检查是否为cli模式
+if(php_sapi_name() !== 'cli'){
+    exit("Please use php cli mode.\n");
+}
+$cmd="/usr/local/php/bin/php";//php的绝对路径
+function syncServer()
+{
+   // echo (yield ['rpc']) ."\n";
+   // echo (yield ['mysqlpool']) ."\n";
+   // echo (yield ['vmstat']) ."\n";
+   // echo (yield ['spider']) ."\n";
+    echo (yield ['task']) ."\n";
+  //  echo (yield ['distributed']) ."\n";
+   // echo (yield ['hprose']) ."\n";
+}
+//异步调用器
+function asyncCaller(Generator $gen)
+{
+    global $cmd;
+    $r = $gen->current();
+    if (isset($r)) {
+        switch ($r[0]) {
+            case 'rpc':
+                foreach(glob(__DIR__.'/rpc/*.php') as $start_file)
+                {
+                    system($cmd.' '.$start_file);
+                }
+                echo "rpc SERVEICE START ...\n";//thrift 的rpc远程调用服务
+                $gen->send('rpc SERVEICE SUCCESS！');
+                asyncCaller($gen);
+                break;
+            case 'mysqlpool':
+                 foreach(glob(__DIR__.'/swoole/MySQLPollServer.php') as $start_file)
+                {
+                    system($cmd.' '.$start_file);
+                }
+                echo "mysqlpool SERVEICE START ...\n";//数据库连接池服务
+                $gen->send('mysqlpool SERVEICE SUCCESS！');
+                asyncCaller($gen);
+                break;
+            case 'vmstat':
+                 foreach(glob(__DIR__.'/swoole/Vm*.php') as $start_file)
+                {
+                    system($cmd.' '.$start_file);
+                }
+                echo "vmstat SERVEICE START ...\n";//硬件监控服务
+                $gen->send('vmstat SERVEICE SUCCESS！');
+                asyncCaller($gen);
+                break;
+            case 'spider':
+                 foreach(glob(__DIR__.'/swoole/SpiderServer.php') as $start_file)
+                {
+                    system($cmd.' '.$start_file);
+                }
+                echo "SpiderServer SERVEICE START ...\n";//网络直播服务
+                $gen->send('SpiderServer SERVEICE SUCCESS!');
+                asyncCaller($gen);
+                break;
+             case 'task':
+                 foreach(glob(__DIR__.'/swoole/TaskServer.php') as $start_file)
+                {
+                    system($cmd.' '.$start_file);
+                }
+                echo "task SERVEICE START ...\n";//任务服务器服务
+                $gen->send('task SERVEICE SUCCESS!');
+                asyncCaller($gen);
+                break;
+            case 'distributed':
+                 foreach(glob(__DIR__.'/distributed/*.php') as $start_file)
+                {
+                    system($cmd.' '.$start_file);
+                }
+                echo "distributed SERVEICE START ...\n";//分布式服务器通讯服务
+                $gen->send('distributed SERVEICE SUCCESS!');
+                asyncCaller($gen);
+                break;
+             case 'hprose':
+                 foreach(glob(__DIR__.'/hprose/*.php') as $start_file)
+                {
+                    system($cmd.' '.$start_file);
+                }
+                echo "hprose SERVEICE START ...\n";//hprose提供rpc服务
+                $gen->send('hprose SERVEICE SUCCESS!');
+                asyncCaller($gen);
+                break;
+            default:
+                $gen->send('no method');
+                asyncCaller($gen);
+                break;
+        }
+    }
+}
+$ser_ser=$argv;
+if(!isset($ser_ser[1])){
+     exit("No argv.\n");
+ }else{
+switch ($ser_ser[1]) {
+    case 'start':
+        asyncCaller(syncServer());
+        break;
+    case 'stop':
+        system("ps -ef | grep -E '".$cmd."|vmstat' |grep -v 'grep'| awk '{print $2}'|xargs kill -9 > /dev/null 2>&1 &");
+        echo "Kill all process success.\n"; 
+        break;
+     case 'restart':
+        system("ps -ef | grep -E '".$cmd."|vmstat' |grep -v 'grep'| awk '{print $2}'|xargs kill -9 > /dev/null 2>&1 &");
+        echo "Kill all process success.\n"; 
+        asyncCaller(syncServer());
+        break;
+    default:
+        exit("Not support this argv.\n");
+        break;
+    }
+ }
+?>
